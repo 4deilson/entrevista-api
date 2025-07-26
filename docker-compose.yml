@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  entrevista-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: entrevista-api-container
+    ports:
+      - "3000:3000"
+    volumes:
+      # Pasta para vídeos finais (persiste entre restarts)
+      # No Portainer, ajuste o caminho conforme sua estrutura
+      - ./output:/app/output
+    environment:
+      - NODE_ENV=production
+      - TZ=America/Sao_Paulo
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/status/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    # Limites de recursos otimizados para servidor
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    # Labels para organização no Portainer
+    labels:
+      - "traefik.enable=false"
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "portainer.project=entrevista-api"
+      - "portainer.description=API de processamento de vídeos de entrevista"
