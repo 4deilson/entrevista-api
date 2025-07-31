@@ -123,9 +123,9 @@ async function processarJobAssincrono(jobData) {
       
       await downloadWithTimeout;
       
-      // Verificação assíncrona do arquivo
+      // Verificação assíncrona do arquivo - apenas verifica se existe
       const stats = await fs.promises.stat(filename);
-      if (!stats || stats.size < 100 * 1024) {
+      if (!stats || stats.size === 0) {
         throw new Error(`Arquivo baixado inválido: ${filename}`);
       }
       return filename;
@@ -151,9 +151,19 @@ async function processarJobAssincrono(jobData) {
     
     const output = await processamentoComTimeout;
     
-    // Move para output (usando versão assíncrona)
+    // Move para output (usando copy + unlink para evitar EXDEV)
     const finalOutputPath = path.join('output', `video_${job_id}.mp4`);
-    await fs.promises.rename(output, finalOutputPath);
+    try {
+      await fs.promises.copyFile(output, finalOutputPath);
+      await fs.promises.unlink(output);
+    } catch (copyError) {
+      // Fallback: tenta rename direto se copy falhar
+      try {
+        await fs.promises.rename(output, finalOutputPath);
+      } catch (renameError) {
+        throw new Error(`Erro ao mover arquivo: ${copyError.message} / ${renameError.message}`);
+      }
+    }
     
     // Limpa arquivos temporários
     await Promise.all(inputPaths.map(async (file) => {
@@ -215,23 +225,38 @@ app.get('/ping', (req, res) => {
 
 // Criar job de entrevista
 app.post('/api/entrevista', async (req, res) => {
-  const { videos, nome, processo } = req.body;
+  const { videos, nome, processo, processo_candidato_bubble_id } = req.body;
 
   if (!videos || !Array.isArray(videos) || videos.length < 2) {
     return res.status(400).json({ error: 'Envie ao menos dois vídeos no array "videos"' });
   }
 
+  if (!nome || typeof nome !== 'string' || nome.trim() === '') {
+    return res.status(400).json({ error: 'Campo "nome" é obrigatório e deve ser uma string não vazia' });
+  }
+
+  if (!processo || typeof processo !== 'string' || processo.trim() === '') {
+    return res.status(400).json({ error: 'Campo "processo" é obrigatório e deve ser uma string não vazia' });
+  }
+
   // Valida URLs (assíncrono e rápido)
-  const validacoes = await Promise.race([
-    validarVideos(videos),
-    new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Validação timeout')), 5000)
-    )
-  ]);
-  
-  const invalidos = validacoes.filter(v => !v.valido);
-  if (invalidos.length > 0) {
-    return res.status(400).json({ error: 'URLs inválidas', invalidos });
+  try {
+    const validacoes = await Promise.race([
+      validarVideos(videos),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Validação timeout')), 5000)
+      )
+    ]);
+    
+    const invalidos = validacoes.filter(v => !v.valido);
+    if (invalidos.length > 0) {
+      return res.status(400).json({ error: 'URLs inválidas', invalidos });
+    }
+  } catch (validationError) {
+    return res.status(400).json({ 
+      error: 'Erro na validação de URLs', 
+      message: validationError.message 
+    });
   }
 
   const job_id = uuidv4();
@@ -240,10 +265,13 @@ app.post('/api/entrevista', async (req, res) => {
     status: 'na_fila', 
     timestamp: Date.now(),
     created: new Date().toISOString(),
-    position: jobQueue.length + 1
+    position: jobQueue.length + 1,
+    nome,
+    processo,
+    processo_candidato_bubble_id: processo_candidato_bubble_id || null
   };
   
-  jobQueue.push({ job_id, videos, nome, processo });
+  jobQueue.push({ job_id, videos, nome, processo, processo_candidato_bubble_id });
   console.log(`📋 Job ${job_id} criado`);
   
   res.json({ 

@@ -18,6 +18,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const https = require('https');
+const gerarAbertura = require('./gerarAbertura');
 
 /**
  * Processa array de vídeos criando entrevista com abertura e efeitos PiP
@@ -38,6 +39,29 @@ const processarVideos = async (arquivos, options = {}) => {
     throw new Error('O parâmetro "arquivos" deve ser um array');
   }
   
+  if (arquivos.length < 2) {
+    throw new Error('É necessário pelo menos 2 vídeos para processar');
+  }
+  
+  // Validação de existência dos arquivos
+  for (let i = 0; i < arquivos.length; i++) {
+    if (!fs.existsSync(arquivos[i])) {
+      throw new Error(`Arquivo não encontrado: ${arquivos[i]}`);
+    }
+    
+    // Verifica se o arquivo não está vazio
+    const stats = fs.statSync(arquivos[i]);
+    if (stats.size === 0) {
+      throw new Error(`Arquivo vazio: ${arquivos[i]}`);
+    }
+  }
+  
+  // Validação do logo (crítico para o funcionamento)
+  const logoFile = path.resolve('logo_abertura.png');
+  if (!fs.existsSync(logoFile)) {
+    throw new Error('Arquivo logo_abertura.png não encontrado. Este arquivo é obrigatório.');
+  }
+  
   return new Promise((resolve, reject) => {
     const id = uuidv4(); // ID único para arquivos temporários
     const output = `tmp/output_${id}.mp4`; // Arquivo de saída final
@@ -48,137 +72,18 @@ const processarVideos = async (arquivos, options = {}) => {
     if (arquivos.length >= 2) {
       
       /**
-       * Gera vídeo de abertura personalizado
-       * Cria intro de 5 segundos com logo, nome do candidato e descrição do processo
-       * 
-       * @returns {Promise<string>} Caminho do arquivo de abertura gerado
-       */
-      const makeAbertura = async () => {
-        const introFile = `tmp/intro_${id}.mp4`;
-        const logoFile = path.resolve('logo_abertura.png');
-        
-        /**
-         * Escapa texto para uso seguro em filtros FFmpeg
-         * Remove caracteres especiais e quebra linhas longas
-         * 
-         * @param {string} text - Texto a ser escapado
-         * @returns {string[]} Array com linhas de texto escapadas
-         */
-        function escapeFfmpegText(text) {
-          if (!text) return [''];
-          
-          // Normaliza o texto: remove quebras de linha e caracteres especiais problemáticos
-          text = text.trim().replace(/\r?\n|\r/g, ' ');
-          // Remove apenas os caracteres mais problemáticos, mantendo parênteses e dois pontos
-          text = text.replace(/['"\\]/g, '');
-          
-          // Função interna para escape básico de caracteres FFmpeg
-          function ffmpegEscape(str) {
-            return str
-              .replace(/:/g, " ")      // Substitui dois pontos por espaço
-              .replace(/\(/g, " ")     // Substitui parênteses por espaço
-              .replace(/\)/g, " ")     // Substitui parênteses por espaço
-              .replace(/\s+/g, ' ')    // Normaliza espaços múltiplos
-              .trim();
-          }
-          
-          // Quebra texto longo em duas linhas (máximo 50 caracteres)
-          if (text.length > 50) {
-            const idx = text.lastIndexOf(' ', 50);
-            if (idx > 0) {
-              return [
-                ffmpegEscape(text.substring(0, idx).trim()),
-                ffmpegEscape(text.substring(idx + 1).trim())
-              ];
-            }
-          }
-          return [ffmpegEscape(text)];
-        }
-        
-        // Configuração de fonte (Windows/Linux)
-        let fontPath = '/Windows/Fonts/arial.ttf';
-        if (!fs.existsSync(fontPath)) {
-          fontPath = '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf'; // Linux path
-        }
-        
-        // Prepara textos escapados para FFmpeg
-        const nomeText = escapeFfmpegText(nome)[0];
-        const processoLines = escapeFfmpegText(processo);
-        
-        /**
-         * Constrói filtro complexo FFmpeg para abertura HD 1280x720
-         * Estrutura visual:
-         * - Logo centralizado no topo (altura 120px)
-         * - Nome do candidato centralizado (fonte 56px)
-         * - Processo em 1-2 linhas centralizadas (fonte 40px)
-         * - Fundo branco limpo por 5 segundos
-         */
-        let filter = `color=white:size=1280x720:d=5[bg];` +
-          `[1:v]scale=0:120:force_original_aspect_ratio=decrease[logo];` +
-          `[bg][logo]overlay=(W-w)/2:60[tmp1];` +
-          `[tmp1]drawtext=fontfile=${fontPath}:text='${nomeText}':fontcolor=black:fontsize=56:x=(w-text_w)/2:y=240[tmp2]`;
-        
-        // Adiciona primeira linha do processo (sempre presente)
-        if (processoLines[0] && processoLines[0].trim()) {
-          filter += `;[tmp2]drawtext=fontfile=${fontPath}:text='${processoLines[0]}':fontcolor=black:fontsize=40:x=(w-text_w)/2:y=320[tmp3]`;
-          
-          // Adiciona segunda linha do processo (se necessário)
-          if (processoLines[1] && processoLines[1].trim()) {
-            filter += `;[tmp3]drawtext=fontfile=${fontPath}:text='${processoLines[1]}':fontcolor=black:fontsize=40:x=(w-text_w)/2:y=380[intro]`;
-          } else {
-            // Só uma linha de processo
-            filter = filter.replace('[tmp3]', '[intro]');
-          }
-        } else {
-          // Sem linha de processo
-          filter = filter.replace('[tmp2]', '[intro]');
-        }
-        
-        // Garante que o filtro termina com o label correto
-        if (!filter.endsWith('[intro]')) {
-          filter += '[intro]';
-        }
-        
-        /**
-         * Executa geração da abertura em duas etapas:
-         * 1. Gera vídeo sem áudio (preview rápido)
-         * 2. Adiciona áudio sincronizado na versão final
-         * Isso garante perfeita sincronização A/V
-         */
-        
-        // Etapa 1: Gera abertura sem áudio (será adicionado depois com sincronização precisa)
-        const cmd = `ffmpeg -f lavfi -i color=white:size=1280x720:d=5:rate=30 -i "${logoFile}" -filter_complex "${filter}" -map [intro] -c:v libx264 -t 5 -r 30 -an -y "${introFile}"`;
-        try {
-          await execAsync(cmd, { timeout: 60000 });
-        } catch (e) {
-          throw new Error('Erro ao gerar abertura: ' + (e.stderr ? e.stderr.toString() : e.message) + (e.stdout ? '\n' + e.stdout.toString() : ''));
-        }
-        
-        // Etapa 2: Gera abertura com áudio e vídeo perfeitamente sincronizados em um só comando
-        const introWithAudioFile = `tmp/intro_final_${id}.mp4`;
-        let finalFilter = filter.replace('[intro]', '[video]');
-        finalFilter += `;anullsrc=channel_layout=stereo:sample_rate=48000[audio]`;
-        
-        const syncCmd = `ffmpeg -f lavfi -i color=white:size=1280x720:d=5:rate=30 -i "${logoFile}" -filter_complex "${finalFilter}" -map [video] -map [audio] -c:v libx264 -c:a aac -t 5 -r 30 -shortest -y "${introWithAudioFile}"`;
-        try {
-          await execAsync(syncCmd, { timeout: 60000 });
-          // Remove arquivo temporário sem áudio
-          try { fs.unlinkSync(introFile); } catch {}
-          return introWithAudioFile;
-        } catch (e) {
-          throw new Error('Erro ao gerar abertura sincronizada: ' + (e.stderr ? e.stderr.toString() : e.message));
-        }
-      };
-
-      
-      /**
        * FLUXO PRINCIPAL DE PROCESSAMENTO
        * Executa a composição completa do vídeo final
        */
       (async () => {
         try {
-          // 1. Gera abertura e adiciona à lista de segmentos finais
-          const aberturaFile = await makeAbertura();
+          // 1. Gera abertura simplificada usando imagem base + vídeo circular
+          const videoCandidato = arquivos.length >= 2 ? arquivos[1] : arquivos[0];
+          const aberturaFile = await gerarAbertura({
+            nome,
+            outputId: id,
+            videoCandidato: videoCandidato
+          });
           
           /**
            * 2. Reencode individual com sincronização isolada para cada vídeo
