@@ -49,48 +49,49 @@ const gerarAbertura = async (options = {}) => {
   
   const aberturaFile = `tmp/abertura_vincci_${outputId}.mp4`;
   
-  // Escapa nome para uso seguro no FFmpeg
-  const nomeEscapado = nome.replace(/['"\\:]/g, '').trim();
+  // Escapa nome para uso seguro no FFmpeg - remove caracteres problemáticos
+  const nomeSeguro = nome.replace(/['"\\:;]/g, '').replace(/\s+/g, '_').trim();
   
-  /**
-   * Filtro FFmpeg com trim para sincronização perfeita
-   */
+  // ABORDAGEM ULTRA SIMPLES - vamos fazer tudo separado sem filter_complex
+  // Primeiro comando: cria base de 5 segundos com template
+  const baseCmd = `ffmpeg -loop 1 -i "${imagemBase}" -t 5 -r 30 -c:v libx264 -y "tmp/base_${outputId}.mp4"`;
   
-  let filter = ``;
+  // Segundo comando: adiciona o vídeo do candidato
+  const overlayCmd = `ffmpeg -i "tmp/base_${outputId}.mp4" -i "${videoCandidato}" -filter_complex "[1:v]scale=122:122:force_original_aspect_ratio=increase,crop=122:122[candidato];[0:v][candidato]overlay=100:488[with_candidato]" -map [with_candidato] -c:v libx264 -t 5 -y "tmp/with_video_${outputId}.mp4"`;
   
-  // Gera 5 segundos direto
-  filter += `color=white:size=1280x720:d=5[fundo_branco];`;
-  
-  // Template da imagem como vídeo de 5 segundos
-  filter += `[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,loop=loop=-1:size=150:start=0[template_video];`;
-  
-  // Vídeo do candidato PAUSADO - primeiro frame apenas, sem loop pesado
-  filter += `[1:v]select=eq(n\\,0),scale=122:122:force_original_aspect_ratio=increase,crop=122:122[candidato_frame];`;
-  filter += `[candidato_frame]loop=loop=-1:size=150:start=0[candidato_video];`;
-  
-  // Aplica máscara circular no vídeo do candidato
-  filter += `[candidato_video]format=yuva420p[candidato_yuva];`;
-  filter += `[candidato_yuva]geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lt(hypot(X-61,Y-61),61),255,0)'[candidato_circular];`;
-  
-  // Combina tudo
-  filter += `[fundo_branco][template_video]overlay=0:0[bg_with_template];`;
-  filter += `[bg_with_template][candidato_circular]overlay=100:488[bg_with_candidato];`;
-  
-  // Adiciona o nome do candidato com fonte Poppins Bold e remove primeiros 1.5s do resultado final
-  filter += `[bg_with_candidato]drawtext=text='${nomeEscapado}':fontcolor=white:fontfile='Poppins-Bold.ttf':fontsize=42:x=265:y=565,trim=start=1.5,setpts=PTS-STARTPTS[video_final];`;
-  
-  // Adiciona áudio sincronizado
-  filter += `anullsrc=channel_layout=stereo:sample_rate=48000[audio];`;
-  
-  // Comando FFmpeg direto
-  const cmd = `ffmpeg -loop 1 -i "${imagemBase}" -i "${videoCandidato}" -filter_complex "${filter}" -map [video_final] -map [audio] -c:v libx264 -c:a aac -t 5 -r 30 -shortest -y "${aberturaFile}"`;
+  // Terceiro comando: adiciona o texto
+  const textCmd = `ffmpeg -i "tmp/with_video_${outputId}.mp4" -vf "drawtext=text=${nomeSeguro}:fontcolor=white:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=42:x=265:y=565" -c:v libx264 -c:a aac -t 5 -y "${aberturaFile}"`;
   
   try {
-    console.log(`[INFO] Gerando abertura para ${nome}...`);
-    await execAsync(cmd, { timeout: 120000 });
+    console.log(`[INFO] Gerando abertura para ${nome} em 3 etapas...`);
+    
+    // Etapa 1: Criar base com template
+    console.log(`[DEBUG] Etapa 1 - Base: ${baseCmd}`);
+    await execAsync(baseCmd, { timeout: 60000 });
+    
+    // Etapa 2: Adicionar vídeo do candidato
+    console.log(`[DEBUG] Etapa 2 - Overlay: ${overlayCmd}`);
+    await execAsync(overlayCmd, { timeout: 60000 });
+    
+    // Etapa 3: Adicionar texto
+    console.log(`[DEBUG] Etapa 3 - Texto: ${textCmd}`);
+    const result = await execAsync(textCmd, { timeout: 60000 });
+    
+    // Limpeza de arquivos temporários
+    try {
+      fs.unlinkSync(`tmp/base_${outputId}.mp4`);
+      fs.unlinkSync(`tmp/with_video_${outputId}.mp4`);
+    } catch (cleanupError) {
+      console.log(`[WARN] Erro na limpeza: ${cleanupError.message}`);
+    }
+    
+    console.log(`[DEBUG] FFmpeg final stdout: ${result.stdout}`);
     console.log(`[INFO] Abertura gerada: ${aberturaFile}`);
     return aberturaFile;
   } catch (e) {
+    console.log(`[ERROR] FFmpeg stderr: ${e.stderr}`);
+    console.log(`[ERROR] FFmpeg stdout: ${e.stdout}`);
+    console.log(`[ERROR] Error message: ${e.message}`);
     throw new Error('Erro ao gerar abertura: ' + (e.stderr ? e.stderr.toString() : e.message));
   }
 };
