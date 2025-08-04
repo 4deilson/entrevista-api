@@ -71,5 +71,5 @@ Dockerfile
 *.mov
 *.mkv
 
-# Garante que o logo seja sempre incluído
-!logo_abertura.png
+# Garante que arquivos essenciais sejam sempre incluídos
+!mask_circle_122.png

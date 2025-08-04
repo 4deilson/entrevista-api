@@ -58,10 +58,10 @@ const gerarAbertura = async (options = {}) => {
   const baseCmd = `ffmpeg -loop 1 -i "${imagemBase}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=48000 -t 5 -r 30 -c:v libx264 -c:a aac -shortest -y "tmp/base_${outputId}.mp4"`;
   
   // Segundo comando: adiciona o vídeo do candidato circular usando máscara PNG
-  const overlayCmd = `ffmpeg -i "tmp/base_${outputId}.mp4" -i "${videoCandidato}" -i mask_circle_122.png -filter_complex "[1:v]select=eq(n\\,0),scale=122:122[vid];[vid][2:v]alphamerge[masked];[0:v][masked]overlay=100:488[with_candidato]" -map [with_candidato] -map 0:a -c:v libx264 -c:a copy -t 5 -y "tmp/with_video_${outputId}.mp4"`;
+  const overlayCmd = `ffmpeg -i "tmp/base_${outputId}.mp4" -i "${videoCandidato}" -i mask_circle_122.png -filter_complex "[1:v]select=eq(n\\,5),scale=122:122[vid];[vid][2:v]alphamerge[masked];[0:v][masked]overlay=100:488[with_candidato]" -map [with_candidato] -map 0:a -c:v libx264 -c:a copy -t 5 -y "tmp/with_video_${outputId}.mp4"`;
   
-  // Terceiro comando: adiciona o texto
-  const textCmd = `ffmpeg -i "tmp/with_video_${outputId}.mp4" -vf "drawtext=text=${nomeSeguro}:fontcolor=white:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=42:x=265:y=561" -c:v libx264 -c:a copy -t 5 -y "${aberturaFile}"`;
+  // Terceiro comando: adiciona o texto E OTIMIZA FINAL para WhatsApp
+  const textCmd = `ffmpeg -i "tmp/with_video_${outputId}.mp4" -vf "drawtext=text=${nomeSeguro}:fontcolor=white:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=42:x=265:y=561" -c:v libx264 -preset fast -crf 28 -maxrate 1000k -bufsize 2000k -c:a aac -b:a 96k -movflags +faststart -t 5 -y "${aberturaFile}"`;
   
   try {
     console.log(`[INFO] Gerando abertura para ${primeiroNome} (nome completo: ${nome}) em 3 etapas...`);

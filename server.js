@@ -141,11 +141,11 @@ async function processarJobAssincrono(jobData) {
       created: jobs[job_id].created 
     };
     
-    // Timeout para processamento FFmpeg (10 minutos)
+    // Timeout para processamento FFmpeg (20 minutos)
     const processamentoComTimeout = Promise.race([
       processarVideos(inputPaths, { nome, processo }),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Processamento timeout - 10min')), 10 * 60 * 1000)
+        setTimeout(() => reject(new Error('Processamento timeout - 20min')), 20 * 60 * 1000)
       )
     ]);
     

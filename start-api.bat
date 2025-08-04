@@ -1,5 +1,6 @@
 @echo off
-:: start-api.bat - Script para iniciar a API matando processos anteriores
+:: start-ap# Verifica dependências
+if not exist "node_modules" (ript para iniciar a API matando processos anteriores
 
 echo.
 echo 🚀 Iniciando API Entrevista - Versao Atualizada
@@ -19,14 +20,6 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :3000') do (
 :: Aguarda um momento para liberação da porta
 echo ⏳ Aguardando liberação da porta...
 timeout /t 3 /nobreak >nul
-
-:: Verifica se logo existe
-if not exist "logo_abertura.png" (
-    echo ❌ ERRO: logo_abertura.png não encontrado!
-    echo    Este arquivo é obrigatório para o funcionamento da API.
-    pause
-    exit /b 1
-)
 
 :: Verifica dependências
 if not exist "node_modules" (

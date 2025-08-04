@@ -44,17 +44,6 @@ RUN npm ci --only=production && npm cache clean --force
 # Copia todo o código da aplicação
 COPY . .
 
-# Verifica se o logo existe (obrigatório para o funcionamento)
-RUN if [ ! -f logo_abertura.png ]; then \
-        echo "AVISO: logo_abertura.png não encontrado!" && \
-        echo "Criando um logo temporário com FFmpeg..." && \
-        ffmpeg -f lavfi -i color=blue:size=300x100:d=1 \
-               -vf "drawtext=text='LOGO':fontcolor=white:fontsize=24:x=(w-text_w)/2:y=(h-text_h)/2" \
-               -frames:v 1 logo_abertura.png -y || \
-        echo "FFmpeg falhou. Usando arquivo vazio temporário." && \
-        touch logo_abertura.png; \
-    fi
-
 # Cria pastas necessárias com permissões apropriadas
 RUN mkdir -p tmp output \
     && chmod 755 tmp output

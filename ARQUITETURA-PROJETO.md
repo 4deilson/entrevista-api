@@ -12,7 +12,7 @@
 - **Sistema de filas assíncronas** - Evita travamentos com até 10 jobs simultâneos
 - **Gerenciamento de estados**: `na_fila` → `baixando` → `processando` → `feito`/`erro`
 - **Endpoints de monitoramento**: `/status/{id}`, `/jobs`, `/debug`
-- **Timeouts inteligentes**: 60s download, 10min processamento
+- **Timeouts inteligentes**: 60s download, 20min processamento
 - **Event Loop não-bloqueante** - API responde durante processamento
 
 ---
@@ -124,7 +124,7 @@
 - Documentação (`*.md`)
 - Logs e temporários
 - Arquivos de desenvolvimento
-- **Mantém**: `logo_abertura.png` (essencial)
+- **Mantém**: `mask_circle_122.png` (essencial)
 
 ---
 
@@ -153,12 +153,12 @@
 
 ## 🎨 Arquivos de Recursos
 
-### `logo_abertura.png` - Logo da Abertura
-**Função**: Imagem usada na abertura de 5 segundos de cada vídeo
+### `mask_circle_122.png` - Máscara Circular
+**Função**: Máscara PNG usada para criar o efeito circular do vídeo do candidato na abertura
 **Especificações**: 
-- Tamanho recomendado: 300x100px
-- Formato PNG com transparência
-- Centralizado automaticamente pelo FFmpeg
+- Tamanho: 122x122px
+- Formato PNG com canal alpha
+- Máscara circular para sobreposição
 
 ---
 

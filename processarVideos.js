@@ -56,12 +56,6 @@ const processarVideos = async (arquivos, options = {}) => {
     }
   }
   
-  // Validação do logo (crítico para o funcionamento)
-  const logoFile = path.resolve('logo_abertura.png');
-  if (!fs.existsSync(logoFile)) {
-    throw new Error('Arquivo logo_abertura.png não encontrado. Este arquivo é obrigatório.');
-  }
-  
   return new Promise((resolve, reject) => {
     const id = uuidv4(); // ID único para arquivos temporários
     const output = `tmp/output_${id}.mp4`; // Arquivo de saída final
@@ -193,7 +187,7 @@ const processarVideos = async (arquivos, options = {}) => {
              * Em caso de erro, limpa arquivos temporários para evitar inconsistências
              */
             try {
-              await execAsync(cmd, { timeout: 600000 }); // 10 min timeout
+              await execAsync(cmd, { timeout: 1200000 }); // 20 min timeout
             } catch (e) {
               intermFiles.forEach((f) => { try { fs.unlinkSync(f); } catch {} });
               segs.forEach((s) => { if (fs.existsSync(s)) try { fs.unlinkSync(s); } catch {} });
@@ -215,12 +209,13 @@ const processarVideos = async (arquivos, options = {}) => {
           const absListFile = path.resolve(listFile);
           
           /**
-           * Concatenação final usando stream copy para máxima eficiência
-           * - Preserva exatamente a qualidade dos segmentos processados
-           * - Evita recodificação desnecessária
-           * - Mantém sincronização de áudio/vídeo já estabelecida
+           * Concatenação final COM OTIMIZAÇÃO para WhatsApp
+           * - Aplica compressão otimizada para compartilhamento
+           * - Mantém qualidade visual aceitável
+           * - Reduz tamanho final do arquivo
+           * - Corta 1 segundo do início para sincronização
            */
-          const concatCmd = `ffmpeg -f concat -safe 0 -i "${absListFile}" -c copy -y "${output}"`;
+          const concatCmd = `ffmpeg -f concat -safe 0 -i "${absListFile}" -ss 1 -c:v libx264 -preset fast -crf 25 -maxrate 2000k -bufsize 4000k -c:a aac -b:a 128k -movflags +faststart -y "${output}"`;
           try {
             await execAsync(concatCmd, { timeout: 300000 }); // 5 min timeout
           } catch (e) {
