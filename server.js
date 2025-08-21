@@ -145,7 +145,7 @@ async function processarJobAssincrono(jobData) {
     const processamentoComTimeout = Promise.race([
       processarVideos(inputPaths, { nome, processo }),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Processamento timeout - 20min')), 20 * 60 * 1000)
+        setTimeout(() => reject(new Error('Processamento timeout - 45min')), 45 * 60 * 1000)
       )
     ]);
     

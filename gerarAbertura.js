@@ -25,11 +25,12 @@ const path = require('path');
  * @param {string} options.processo - Descrição do processo seletivo (não usado na versão simplificada)
  * @param {string} options.outputId - ID único para nomear arquivos temporários
  * @param {string} options.videoCandidato - Caminho do vídeo do candidato (para usar como "foto")
+ * @param {string} options.processoId - ID do processo para logs padronizados
  * @returns {Promise<string>} Caminho do arquivo de abertura gerado
  * @throws {Error} Erro de validação ou processamento
  */
 const gerarAbertura = async (options = {}) => {
-  const { nome, processo, outputId, videoCandidato } = options;
+  const { nome, processo, outputId, videoCandidato, processoId } = options;
   
   // Validação de parâmetros obrigatórios
   if (!nome || !outputId || !videoCandidato) {
@@ -64,18 +65,15 @@ const gerarAbertura = async (options = {}) => {
   const textCmd = `ffmpeg -i "tmp/with_video_${outputId}.mp4" -vf "drawtext=text=${nomeSeguro}:fontcolor=white:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:fontsize=42:x=265:y=561" -c:v libx264 -preset fast -crf 28 -maxrate 1000k -bufsize 2000k -c:a aac -b:a 96k -movflags +faststart -t 5 -y "${aberturaFile}"`;
   
   try {
-    console.log(`[INFO] Gerando abertura para ${primeiroNome} (nome completo: ${nome}) em 3 etapas...`);
+    console.log(`🎬 [${processoId || 'ABERTURA'}] Gerando abertura para ${primeiroNome} (nome completo: ${nome}) em 3 etapas...`);
     
     // Etapa 1: Criar base com template
-    console.log(`[DEBUG] Etapa 1 - Base: ${baseCmd}`);
     await execAsync(baseCmd, { timeout: 60000 });
     
     // Etapa 2: Adicionar vídeo do candidato
-    console.log(`[DEBUG] Etapa 2 - Overlay: ${overlayCmd}`);
     await execAsync(overlayCmd, { timeout: 60000 });
     
     // Etapa 3: Adicionar texto
-    console.log(`[DEBUG] Etapa 3 - Texto: ${textCmd}`);
     const result = await execAsync(textCmd, { timeout: 60000 });
     
     // Limpeza de arquivos temporários
@@ -83,16 +81,15 @@ const gerarAbertura = async (options = {}) => {
       fs.unlinkSync(`tmp/base_${outputId}.mp4`);
       fs.unlinkSync(`tmp/with_video_${outputId}.mp4`);
     } catch (cleanupError) {
-      console.log(`[WARN] Erro na limpeza: ${cleanupError.message}`);
+      console.log(`⚠️ [${processoId || 'ABERTURA'}] Erro na limpeza: ${cleanupError.message}`);
     }
     
-    console.log(`[DEBUG] FFmpeg final stdout: ${result.stdout}`);
-    console.log(`[INFO] Abertura gerada: ${aberturaFile}`);
+    console.log(`✅ [${processoId || 'ABERTURA'}] Abertura gerada: ${aberturaFile}`);
     return aberturaFile;
   } catch (e) {
-    console.log(`[ERROR] FFmpeg stderr: ${e.stderr}`);
-    console.log(`[ERROR] FFmpeg stdout: ${e.stdout}`);
-    console.log(`[ERROR] Error message: ${e.message}`);
+    console.log(`❌ [${processoId || 'ABERTURA'}] FFmpeg stderr: ${e.stderr}`);
+    console.log(`❌ [${processoId || 'ABERTURA'}] FFmpeg stdout: ${e.stdout}`);
+    console.log(`❌ [${processoId || 'ABERTURA'}] Error message: ${e.message}`);
     throw new Error('Erro ao gerar abertura: ' + (e.stderr ? e.stderr.toString() : e.message));
   }
 };
