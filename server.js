@@ -128,6 +128,32 @@ async function processarJobAssincrono(jobData) {
       if (!stats || stats.size === 0) {
         throw new Error(`Arquivo baixado inválido: ${filename}`);
       }
+      
+      // Validação de áudio APENAS para vídeos do candidato (índices ímpares: 1, 3, 5...)
+      if (index % 2 === 1) { // index 1 = vídeo 2 (candidato), index 3 = vídeo 4 (candidato), etc.
+        try {
+          const { exec } = require('child_process');
+          const { promisify } = require('util');
+          const execAsync = promisify(exec);
+          
+          const audioCheck = await execAsync(`ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "${filename}"`, { timeout: 10000 });
+          const hasAudio = audioCheck.stdout.toString().trim() === 'audio';
+          
+          if (!hasAudio) {
+            // Remove o arquivo inválido
+            try { await fs.promises.unlink(filename); } catch {}
+            throw new Error(`Vídeo do candidato ${index + 1} não possui faixa de áudio obrigatória`);
+          }
+        } catch (error) {
+          // Remove o arquivo inválido em caso de erro
+          try { await fs.promises.unlink(filename); } catch {}
+          if (error.message.includes('não possui faixa de áudio')) {
+            throw error; // Re-throw nossa mensagem customizada
+          }
+          throw new Error(`Falha na validação de áudio do vídeo candidato ${index + 1}: ${error.message}`);
+        }
+      }
+      
       return filename;
     });
 

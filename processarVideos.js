@@ -58,7 +58,7 @@ const processarVideos = async (arquivos, options = {}) => {
       throw new Error(`[${processoId}] Arquivo vazio: ${arquivos[i]}`);
     }
   }
-  
+
   const getElapsed = () => `${Math.round((Date.now() - startTime) / 1000)}s`;
   console.log(`✅ [${processoId}] Validação concluída em ${getElapsed()}`);
   
